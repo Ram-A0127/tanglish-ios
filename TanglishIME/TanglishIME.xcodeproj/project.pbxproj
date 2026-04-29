@@ -428,7 +428,7 @@
 				DEVELOPMENT_TEAM = 2XDMD2MR45;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TanglishKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TanglishKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = Tanglish;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -457,7 +457,7 @@
 				DEVELOPMENT_TEAM = 2XDMD2MR45;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TanglishKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TanglishKeyboard;
+				INFOPLIST_KEY_CFBundleDisplayName = Tanglish;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (

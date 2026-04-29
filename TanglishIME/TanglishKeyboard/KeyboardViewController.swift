@@ -13,10 +13,39 @@ final class KeyboardViewController: UIInputViewController {
         "seekiram vaaren": ["wait pannu da", "seri pa", "romba late aaguthu"],
         "pasikuthu": ["enna saapidalam?", "biryani va?", "hotel pouvom da"],
         "poiren": ["seri da", "seekiram vaa", "wait pannuren"],
-        "kaadhalikkiren": ["unnai matum da", "romba neram aachu", "seekiram paakanum"],
+        "kaadhalikkiren": ["unnai matum da", "romba neram aachu paakama", "seekiram paakanum"],
         "thoonganum": ["seri thoong da", "nalla thoong", "seekiram pa"],
         "busy da": ["ippo time illa da", "konjam busy da", "aprom pesalam"],
         "aama da": ["correct", "nalla solninga", "seekiram pannom"],
+        "unnai romba miss pannuren": ["seekiram paakanum da", "romba neram aachu", "unnai pathi yosikren"],
+        "eppo varuva": ["seekiram vaa da", "wait pannuren", "naalekki varuviya?"],
+        "naalekki vaaren wait pannu": ["seri da", "romba neram aachu", "seekiram vaa"],
+        "seekiram vaa da": ["wait pannuren da", "romba neram aachu", "miss pannuren unnai"],
+        "aama da promise": ["samba pannurom!", "naan wait pannuren", "seekiram vaa da"],
+        "dei romba kovama iruku": ["romba kashtapadutha da", "mudiyala da", "en pannuva avan?"],
+        "avan romba kashtapadutha": ["mudiyala da", "paakavey vendam", "romba kovama iruku"],
+        "paravaillai namma paakalam": ["seri eppo?", "aama seekiram paakalam", "confirm pannu da"],
+        "nalla aagum trust pannu": ["aama nambikkai iruku", "seekiram solve aagum", "nandri da"],
+        "da romba dukhamaaa iruku": ["romba kashtama iruku da", "theriyala enna pannurathu", "yosikren da"],
+        "romba kashtama iruku": ["theriyala enna pannurathu", "enna pannonom", "yaarum puriyala da"],
+        "theriyala eppo nalla aagum": ["yosikren da", "konjam neram venum", "nambikkai illama iruku"],
+        "naalekki va da": ["romba santhosama iruku", "wait pannuren da", "seekiram vaa please"],
+        "romba santhosama iruku": ["unnai paakum pothu", "nee irukka seri da", "seekiram paakalam"],
+        "da weekend enna plan": ["movie paakalam va?", "beach pouvom da", "enna pannalam sollu"],
+        "movie paakalam va": ["semma idea da!", "entha movie?", "eppo pouvom?"],
+        "saturday evening ok va": ["aama da perfect!", "seri confirm pannuren", "entha time exactly?"],
+        "da semma news sollaren": ["romba nalla vishayam da!", "seekiram ketteengala?", "adhirchi aaguveenga!"],
+        "job offer vandhuchu": ["romba santhosama iruku da!", "nambavey mudiyala!", "seekiram celebrate pannalam"],
+        "dei thoongala": ["illai da enna aaichu?", "romba neram aachu thoonga", "yosikren da"],
+        "romba yosikren": ["thoonga mudiyala da", "romba kashtama iruku", "enna pannurathu theriyala"],
+        "naalaikki exam iruku": ["padikanum da", "romba nervous da", "help pannuva?"],
+        "da office romba stress": ["deadline iruku da", "mudiyala romba", "help venum da"],
+        "deadline irukku mudiyala": ["romba kashtama iruku da", "help pannuga da", "eppo mudiyum theriyala"],
+        "i miss": ["unnai miss pannuren", "romba nalam paakala", "seekiram vaa da"],
+        "i love": ["unnai kaadhalikkiren", "romba pidikkuthu machi", "seekiram paakanum"],
+        "good morning": ["kalai vanakkam da", "eppadi irukka?", "nalam thaane?"],
+        "good night": ["nalla thoong da", "sweet dreams machi", "seekiram pa"],
+        "i am tired": ["romba tired aaguthu da", "kashtama iruku", "rest edukanum"],
     ]
 
     private let localCorrections: [String: (std: String, tamil: String)] = [
@@ -103,7 +132,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private lazy var shiftButton: UIButton = makeKeyButton(title: "⇧", action: #selector(handleShift))
     private lazy var backspaceButton: UIButton = makeKeyButton(title: "⌫", action: #selector(handleBackspace))
-    private lazy var globeButton: UIButton = makeKeyButton(title: "🌐", action: #selector(handleNextKeyboard))
+    private lazy var globeButton: UIButton = makeKeyButton(title: "Tamil", action: #selector(handleNextKeyboard))
     private lazy var spaceButton: UIButton = makeKeyButton(title: "space", action: #selector(handleSpace))
     private lazy var returnButton: UIButton = makeKeyButton(title: "return", action: #selector(handleReturn))
 
