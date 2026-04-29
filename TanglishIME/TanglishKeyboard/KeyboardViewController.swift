@@ -558,6 +558,10 @@ final class KeyboardViewController: UIInputViewController {
             ? String(suggestion.prefix(1).uppercased() + suggestion.dropFirst())
             : suggestion
         textDocumentProxy.insertText(finalSuggestion + " ")
+        TanglishAPIService.shared.logAcceptedSuggestion(
+            raw: word,
+            std: finalSuggestion
+        )
         updateSuggestionBar(left: "", centre: "", right: "")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in

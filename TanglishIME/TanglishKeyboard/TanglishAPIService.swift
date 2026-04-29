@@ -9,6 +9,8 @@ final class TanglishAPIService {
     }
 
     static let shared = TanglishAPIService()
+    private let supabaseURL = "https://uiwmcmutiywduqbeapnj.supabase.co"
+    private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVpd21jbXV0aXl3ZHVxYmVhcG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTg5ODksImV4cCI6MjA5MjA3NDk4OX0.SGfj-hiBrTTt9hzjheXun_NawDUXFsOttcU9vMF1YZ4"
 
     private var cache: [String: SuggestionResult] = [:]
     private let cacheQueue = DispatchQueue(label: "TanglishAPIService.CacheQueue")
@@ -109,6 +111,32 @@ final class TanglishAPIService {
         }.resume()
     }
 
+    func logAcceptedSuggestion(raw: String, std: String) {
+        guard !raw.isEmpty, !std.isEmpty, raw != std else { return }
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/word_events") else { return }
+
+        var request = URLRequest(url: url, timeoutInterval: 5)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "Authorization")
+        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+
+        let payload: [String: Any] = [
+            "word_hash": hashWord(raw),
+            "standard_form": std,
+            "accepted": true,
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+    }
+
     private static func standardiseCacheKey(word: String, isEnglish: Bool) -> String {
         "\(word.lowercased())|en:\(isEnglish)"
     }
@@ -123,6 +151,15 @@ final class TanglishAPIService {
         cacheQueue.async {
             self.cache[key] = result
         }
+    }
+
+    private func hashWord(_ word: String) -> String {
+        let lower = word.lowercased().trimmingCharacters(in: .whitespaces)
+        var hash = 0
+        for char in lower.unicodeScalars {
+            hash = hash &* 31 &+ Int(char.value)
+        }
+        return String(format: "%08x", abs(hash))
     }
 
     private static func parseSuggestionResult(from data: Data) -> SuggestionResult? {
