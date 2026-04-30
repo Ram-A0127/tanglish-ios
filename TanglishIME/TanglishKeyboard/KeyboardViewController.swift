@@ -89,7 +89,9 @@ final class KeyboardViewController: UIInputViewController {
     ]
 
     private let keyHeight: CGFloat = 42
+    private let spaceKeyHeight: CGFloat = 46
     private let keyGap: CGFloat = 6
+    private let keyboardHeight: CGFloat = 260
 
     private var isShiftEnabled = false
     private var capsLockEnabled = false
@@ -99,6 +101,7 @@ final class KeyboardViewController: UIInputViewController {
     private let shiftDoubleTapInterval: TimeInterval = 0.3
     private var currentSuggestion: TanglishAPIService.SuggestionResult?
     private var isNumbersMode = false
+    private var isEmojiPanelVisible = false
     private var buttonsWithWidthConstraint = Set<ObjectIdentifier>()
     /// Letter keys only (QWERTY rows); empty when in numbers mode.
     private var keyButtons: [[UIButton]] = []
@@ -111,33 +114,35 @@ final class KeyboardViewController: UIInputViewController {
     }()
 
     private lazy var modeToggleButton: UIButton = makeKeyButton(title: "123", action: #selector(handleNumberMode))
+    private lazy var emojiPanelButton: UIButton = makeKeyButton(title: "😊", action: #selector(handleEmojiPanel))
 
     private lazy var leftSuggestionButton: UIButton = makeSuggestionButton(
         title: "—",
-        textColor: UIColor(white: 0.45, alpha: 1),
-        font: .systemFont(ofSize: 16, weight: .regular)
+        textColor: UIColor(hex: "#6B7280"),
+        font: .systemFont(ofSize: 13, weight: .regular)
     )
 
     private lazy var centerSuggestionButton: UIButton = makeSuggestionButton(
         title: "",
         textColor: UIColor(hex: "#D97706"),
-        font: .systemFont(ofSize: 16, weight: .bold)
+        font: .systemFont(ofSize: 15, weight: .bold)
     )
 
     private lazy var rightSuggestionButton: UIButton = makeSuggestionButton(
         title: "—",
-        textColor: UIColor(white: 0.45, alpha: 1),
-        font: .systemFont(ofSize: 16, weight: .regular)
+        textColor: UIColor(hex: "#6B7280"),
+        font: .systemFont(ofSize: 13, weight: .regular)
     )
 
     private lazy var shiftButton: UIButton = makeKeyButton(title: "⇧", action: #selector(handleShift))
     private lazy var backspaceButton: UIButton = makeKeyButton(title: "⌫", action: #selector(handleBackspace))
-    private lazy var globeButton: UIButton = makeKeyButton(title: "Tamil", action: #selector(handleNextKeyboard))
-    private lazy var spaceButton: UIButton = makeKeyButton(title: "space", action: #selector(handleSpace))
-    private lazy var returnButton: UIButton = makeKeyButton(title: "return", action: #selector(handleReturn))
+    private lazy var globeButton: UIButton = makeKeyButton(title: "🌐", action: #selector(handleNextKeyboard))
+    private lazy var spaceButton: UIButton = makeSpaceBarButton()
+    private lazy var returnButton: UIButton = makeReturnKeyButton()
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.frame.size.height = keyboardHeight
         setupKeyboardUI()
         updateShiftAppearance()
     }
@@ -201,8 +206,40 @@ final class KeyboardViewController: UIInputViewController {
         suggestionBar.axis = .horizontal
         suggestionBar.distribution = .fillEqually
         suggestionBar.spacing = keyGap
-        suggestionBar.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        rootStack.addArrangedSubview(suggestionBar)
+        suggestionBar.translatesAutoresizingMaskIntoConstraints = false
+
+        let suggestionBarContainer = UIView()
+        suggestionBarContainer.translatesAutoresizingMaskIntoConstraints = false
+        suggestionBarContainer.addSubview(suggestionBar)
+
+        let suggestionBorder = UIView()
+        suggestionBorder.backgroundColor = UIColor(hex: "#E5E7EB")
+        suggestionBorder.translatesAutoresizingMaskIntoConstraints = false
+        suggestionBarContainer.addSubview(suggestionBorder)
+
+        NSLayoutConstraint.activate([
+            suggestionBar.topAnchor.constraint(equalTo: suggestionBarContainer.topAnchor),
+            suggestionBar.leadingAnchor.constraint(equalTo: suggestionBarContainer.leadingAnchor),
+            suggestionBar.trailingAnchor.constraint(equalTo: suggestionBarContainer.trailingAnchor),
+            suggestionBar.heightAnchor.constraint(equalToConstant: 44),
+
+            suggestionBorder.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
+            suggestionBorder.leadingAnchor.constraint(equalTo: suggestionBarContainer.leadingAnchor),
+            suggestionBorder.trailingAnchor.constraint(equalTo: suggestionBarContainer.trailingAnchor),
+            suggestionBorder.bottomAnchor.constraint(equalTo: suggestionBarContainer.bottomAnchor),
+            suggestionBorder.heightAnchor.constraint(equalToConstant: 0.5),
+
+            suggestionBarContainer.heightAnchor.constraint(equalToConstant: 44.5),
+        ])
+
+        leftSuggestionButton.tag = 0
+        centerSuggestionButton.tag = 1
+        rightSuggestionButton.tag = 2
+        attachSuggestionBarHighlightHandlers(to: leftSuggestionButton)
+        attachSuggestionBarHighlightHandlers(to: centerSuggestionButton)
+        attachSuggestionBarHighlightHandlers(to: rightSuggestionButton)
+
+        rootStack.addArrangedSubview(suggestionBarContainer)
 
         rootStack.addArrangedSubview(keyboardContentStack)
         rebuildKeyboardRows()
@@ -226,6 +263,11 @@ final class KeyboardViewController: UIInputViewController {
         keyboardContentStack.arrangedSubviews.forEach { row in
             keyboardContentStack.removeArrangedSubview(row)
             row.removeFromSuperview()
+        }
+        if isEmojiPanelVisible {
+            keyButtons = []
+            keyboardContentStack.addArrangedSubview(makeEmojiPanelContainer())
+            return
         }
         if isNumbersMode {
             keyButtons = []
@@ -331,11 +373,13 @@ final class KeyboardViewController: UIInputViewController {
         row.spacing = keyGap
 
         setFixedWidthIfNeeded(modeToggleButton, 56)
-        setFixedWidthIfNeeded(globeButton, 50)
+        setFixedWidthIfNeeded(emojiPanelButton, 56)
+        setFixedWidthIfNeeded(globeButton, 56)
         setFixedWidthIfNeeded(returnButton, 72)
         setMinimumWidthIfNeeded(spaceButton, 140)
 
         row.addArrangedSubview(modeToggleButton)
+        row.addArrangedSubview(emojiPanelButton)
         row.addArrangedSubview(globeButton)
         row.addArrangedSubview(spaceButton)
         row.addArrangedSubview(returnButton)
@@ -356,6 +400,93 @@ final class KeyboardViewController: UIInputViewController {
         row.addArrangedSubview(spaceButton)
         row.addArrangedSubview(returnButton)
         return row
+    }
+
+    private func makeEmojiPanelContainer() -> UIView {
+        let outer = UIView()
+        outer.translatesAutoresizingMaskIntoConstraints = false
+        outer.backgroundColor = UIColor(hex: "#F0F0F0")
+        outer.heightAnchor.constraint(equalToConstant: 216).isActive = true
+
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.backgroundColor = UIColor(hex: "#F0F0F0")
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = true
+
+        let contentStack = UIStackView()
+        contentStack.axis = .vertical
+        contentStack.spacing = keyGap
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let emojiRows: [[String]] = [
+            ["😂", "😭", "🥹", "😍", "🥰"],
+            ["❤️", "🧡", "💛", "💚", "💙"],
+            ["🙏", "👍", "🤝", "💪", "🫶"],
+            ["🔥", "✨", "💯", "🎉", "😎"],
+            ["🌺", "🪔", "🎊", "🫂", "😤"],
+            ["🍛", "🍚", "🫓", "☕", "🧆"],
+            ["😅", "🤣", "😬", "🙈", "😴"],
+        ]
+
+        for symbols in emojiRows {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.distribution = .fillEqually
+            rowStack.spacing = keyGap
+            for symbol in symbols {
+                rowStack.addArrangedSubview(makeEmojiKeyButton(symbol))
+            }
+            rowStack.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            contentStack.addArrangedSubview(rowStack)
+        }
+
+        let backButton = makeEmojiBackButton()
+        contentStack.addArrangedSubview(backButton)
+
+        outer.addSubview(scrollView)
+        scrollView.addSubview(contentStack)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: outer.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: outer.bottomAnchor),
+
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+        ])
+
+        return outer
+    }
+
+    private func makeEmojiKeyButton(_ emoji: String) -> UIButton {
+        let button = UIButton(type: .custom)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle(emoji, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 28)
+        button.titleLabel?.textAlignment = .center
+        button.backgroundColor = .clear
+        button.addTarget(self, action: #selector(handleEmojiInsert(_:)), for: .touchUpInside)
+        return button
+    }
+
+    private func makeEmojiBackButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("ABC", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        button.setTitleColor(UIColor(hex: "#111827"), for: .normal)
+        button.backgroundColor = UIColor(hex: "#FFFFFF")
+        button.layer.cornerRadius = 8
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
+        button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
+        button.addTarget(self, action: #selector(handleDismissEmojiPanel), for: .touchUpInside)
+        return button
     }
 
     private func makeKeyButton(title: String, action: Selector) -> UIButton {
@@ -383,6 +514,56 @@ final class KeyboardViewController: UIInputViewController {
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
         button.addTarget(self, action: #selector(suggestionTapped(_:)), for: .touchUpInside)
+        return button
+    }
+
+    private func attachSuggestionBarHighlightHandlers(to button: UIButton) {
+        button.addTarget(self, action: #selector(suggestionTouchDown(_:)), for: .touchDown)
+        button.addTarget(self, action: #selector(suggestionTouchUp(_:)), for: .touchUpInside)
+        button.addTarget(self, action: #selector(suggestionTouchUp(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(suggestionTouchUp(_:)), for: .touchCancel)
+    }
+
+    @objc private func suggestionTouchDown(_ sender: UIButton) {
+        let flash: UIColor = sender.tag == 1
+            ? UIColor(hex: "#FEF3C7")
+            : UIColor(hex: "#F3F4F6")
+        sender.backgroundColor = flash
+    }
+
+    @objc private func suggestionTouchUp(_ sender: UIButton) {
+        UIView.animate(withDuration: 0.12) {
+            sender.backgroundColor = .white
+        }
+    }
+
+    private func makeSpaceBarButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("space", for: .normal)
+        button.setTitleColor(UIColor(hex: "#6B7280"), for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
+        button.backgroundColor = UIColor(hex: "#FFFFFF")
+        button.layer.cornerRadius = 8
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
+        button.heightAnchor.constraint(equalToConstant: spaceKeyHeight).isActive = true
+        button.addTarget(self, action: #selector(handleSpace), for: .touchUpInside)
+        return button
+    }
+
+    private func makeReturnKeyButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("return", for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
+        button.backgroundColor = UIColor(hex: "#ADB5BD")
+        button.layer.cornerRadius = 8
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor(white: 0.75, alpha: 1).cgColor
+        button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
+        button.addTarget(self, action: #selector(handleReturn), for: .touchUpInside)
         return button
     }
 
@@ -529,8 +710,26 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func handleNumberMode() {
+        isEmojiPanelVisible = false
         isNumbersMode.toggle()
         rebuildKeyboardRows()
+    }
+
+    @objc private func handleEmojiPanel() {
+        isEmojiPanelVisible = true
+        isNumbersMode = false
+        rebuildKeyboardRows()
+    }
+
+    @objc private func handleDismissEmojiPanel() {
+        isEmojiPanelVisible = false
+        rebuildKeyboardRows()
+    }
+
+    @objc private func handleEmojiInsert(_ sender: UIButton) {
+        guard let emoji = sender.title(for: .normal), !emoji.isEmpty else { return }
+        textDocumentProxy.insertText(emoji)
+        scheduleSuggestionFetch()
     }
 
     @objc private func suggestionTapped(_ sender: UIButton) {
