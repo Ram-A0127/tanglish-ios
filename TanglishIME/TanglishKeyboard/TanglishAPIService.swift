@@ -137,6 +137,32 @@ final class TanglishAPIService {
         URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
     }
 
+    func logRejectedSuggestion(raw: String, suggested: String) {
+        guard !raw.isEmpty, !suggested.isEmpty else { return }
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/word_events") else { return }
+
+        var request = URLRequest(url: url, timeoutInterval: 5)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "Authorization")
+        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+
+        let payload: [String: Any] = [
+            "word_hash": hashWord(raw),
+            "standard_form": suggested,
+            "accepted": false,
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+    }
+
     private static func standardiseCacheKey(word: String, isEnglish: Bool) -> String {
         "\(word.lowercased())|en:\(isEnglish)"
     }

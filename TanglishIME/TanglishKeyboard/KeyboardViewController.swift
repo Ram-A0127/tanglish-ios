@@ -6,10 +6,10 @@ final class KeyboardViewController: UIInputViewController {
         "vanakkam": ["eppadi irukka?", "nalam thaane?", "seekiram sollu"],
         "romba nalla": ["iruku da", "vishayam da!", "santhosama iruku"],
         "seri da": ["aama paakalam", "purinjikko da", "aprom pesalam"],
-        "nalla iruku": ["santhosam da", "eppadi irukeenga?", "sollu da"],
+        "nalla iruku": ["neenga eppadi?", "santhosam da", "nalam thaane?"],
         "miss pannuren": ["seekiram paakanum da", "romba nalam paakala", "unnai pathi yosikren"],
         "romba neram": ["aachu da", "paakala yen?", "en aagire?"],
-        "paravaillai": ["nalla aagum da", "trust pannu", "seekiram paakalam"],
+        "paravaillai": ["nalla aagum da", "yosikadha", "trust pannu"],
         "seekiram vaaren": ["wait pannu da", "seri pa", "romba late aaguthu"],
         "pasikuthu": ["enna saapidalam?", "biryani va?", "hotel pouvom da"],
         "poiren": ["seri da", "seekiram vaa", "wait pannuren"],
@@ -43,8 +43,52 @@ final class KeyboardViewController: UIInputViewController {
         "deadline irukku mudiyala": ["romba kashtama iruku da", "help pannuga da", "eppo mudiyum theriyala"],
         "i miss": ["unnai miss pannuren", "romba nalam paakala", "seekiram vaa da"],
         "i love": ["unnai kaadhalikkiren", "romba pidikkuthu machi", "seekiram paakanum"],
-        "good morning": ["kalai vanakkam da", "eppadi irukka?", "nalam thaane?"],
-        "good night": ["nalla thoong da", "sweet dreams machi", "seekiram pa"],
+        "good morning": ["kalai vanakkam", "eppadi irukka?", "nalam thaane?"],
+        "good night": ["nalla thoong da", "sweet dreams", "seekiram pa"],
+        // Greetings
+        "hai": ["eppadi irukka?", "nalam thaane?", "vanakkam da"],
+        "hello": ["vanakkam da", "eppadi irukka?", "nalam thaane?"],
+        "hey": ["enna da", "eppadi irukka?", "vanakkam"],
+        // Responses
+        "nalla irukken": ["neenga eppadi irukeenga?", "santhosam da", "nalam thaane?"],
+        "seri": ["paakalam da", "purinjikko", "aprom pesalam"],
+        "ok da": ["seri paakalam", "confirm pannu", "aprom pesalam"],
+        "ok": ["seri da", "paakalam", "noted da"],
+        "aama": ["correct da", "purinjikko", "seekiram pannom"],
+        "illa": ["seri da paravaillai", "en da?", "enna aaichu?"],
+        // Common expressions
+        "romba": ["nalla iruku da", "kashtama iruku", "miss pannuren"],
+        "konjam": ["neram venum da", "busy da", "help pannuva?"],
+        "seekiram": ["vaa da", "pannuven da", "mudichu sollu"],
+        "nandri": ["romba nandri da", "unga support ku", "illana mudiyathu"],
+        "sorry": ["paravaillai da", "mannichukkonga", "nalla aagum"],
+        // Questions
+        "enna": ["pannure da?", "aaichu?", "vishayam?"],
+        "eppo": ["varuva?", "pouve?", "paakalam?"],
+        "eppadi": ["irukka?", "pannurathu?", "porathu?"],
+        "yaar": ["solnanga?", "vandhaanga?", "pannanga?"],
+        "enge": ["irukka?", "poure?", "vandhaanga?"],
+        // Feelings
+        "tired": ["romba tired da", "rest edukanum", "kashtama iruku"],
+        "happy": ["romba santhosam da", "nalla vishayam", "seekiram sollu"],
+        "sad": ["enna aaichu da?", "paravaillai nalla aagum", "sollu da"],
+        "miss": ["pannuren da", "romba nalam paakala", "seekiram paakalam"],
+        // Food
+        "coffee": ["kudikalam va?", "venum da", "saapittiya?"],
+        "tea": ["kudikalam va?", "venum da", "saapittiya?"],
+        "lunch": ["saapittiya?", "saapidalam va?", "enna saapida?"],
+        "dinner": ["saapittiya?", "saapidalam va?", "enna saapida?"],
+        // Planning
+        "tomorrow": ["paakalam da", "time iruka?", "confirm pannu"],
+        "weekend": ["enna plan?", "paakalam va?", "free irukiya?"],
+        "today": ["enna plan?", "time iruka?", "paakalam va?"],
+        "naalekki": ["paakalam da", "time iruka?", "confirm pannu"],
+        "innikki": ["enna plan?", "time iruka?", "paakalam va?"],
+        // Work
+        "meeting": ["iruku da", "mudinjuchu", "eppo?"],
+        "office": ["romba busy da", "stress da", "seekiram mudiyum"],
+        "work": ["panren da", "romba busy", "seekiram mudiyum"],
+        "deadline": ["iruku da", "romba tight", "help venum"],
         "i am tired": ["romba tired aaguthu da", "kashtama iruku", "rest edukanum"],
     ]
 
@@ -100,6 +144,10 @@ final class KeyboardViewController: UIInputViewController {
     private var lastShiftTapTime: TimeInterval = 0
     private let shiftDoubleTapInterval: TimeInterval = 0.3
     private var currentSuggestion: TanglishAPIService.SuggestionResult?
+    private var lastShownSuggestion: (raw: String, std: String)? = nil
+    private var lastAcceptedSuggestion: String? = nil
+    private var lastAcceptedRaw: String? = nil
+    private var charCountAfterAcceptance: Int = 0
     private var isNumbersMode = false
     private var isEmojiPanelVisible = false
     private var buttonsWithWidthConstraint = Set<ObjectIdentifier>()
@@ -145,6 +193,20 @@ final class KeyboardViewController: UIInputViewController {
         view.frame.size.height = keyboardHeight
         setupKeyboardUI()
         updateShiftAppearance()
+        warmUpCache()
+    }
+
+    private func warmUpCache() {
+        let commonSentences = [
+            "vanakkam da",
+            "nalla iruku",
+            "seri da",
+            "romba nalla",
+            "seekiram vaa",
+        ]
+        for sentence in commonSentences {
+            TanglishAPIService.shared.predict(sentence: sentence) { _ in }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -569,10 +631,18 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func handleKeyPress(_ sender: UIButton) {
         guard let title = sender.currentTitle, title.count == 1 else { return }
+        if let rejected = lastShownSuggestion {
+            TanglishAPIService.shared.logRejectedSuggestion(
+                raw: rejected.raw,
+                suggested: rejected.std
+            )
+            lastShownSuggestion = nil
+        }
         let output = isShiftEnabled ? title.uppercased() : title.lowercased()
 
         if title == "." || title == "?" || title == "!" {
             textDocumentProxy.insertText(output)
+            handlePostAcceptanceKeyInserted()
             if !capsLockEnabled {
                 isShiftEnabled = false
             }
@@ -582,6 +652,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         textDocumentProxy.insertText(output)
+        handlePostAcceptanceKeyInserted()
 
         if isShiftEnabled, !capsLockEnabled, output.first?.isLetter == true {
             isShiftEnabled = false
@@ -589,6 +660,27 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         scheduleSuggestionFetch()
+    }
+
+    private func handlePostAcceptanceKeyInserted() {
+        guard lastAcceptedSuggestion != nil else { return }
+        charCountAfterAcceptance += 1
+
+        if charCountAfterAcceptance <= 4 {
+            let context = textDocumentProxy.documentContextBeforeInput ?? ""
+            let words = context.components(separatedBy: " ")
+            if let compoundWord = words.dropLast().last,
+               compoundWord.count > 2 {
+                TanglishAPIService.shared.logAcceptedSuggestion(
+                    raw: compoundWord,
+                    std: compoundWord
+                )
+            }
+        } else {
+            lastAcceptedSuggestion = nil
+            lastAcceptedRaw = nil
+            charCountAfterAcceptance = 0
+        }
     }
 
     @objc private func handleMultiCharKeyPress(_ sender: UIButton) {
@@ -601,7 +693,17 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func handleSpace() {
+        if let rejected = lastShownSuggestion {
+            TanglishAPIService.shared.logRejectedSuggestion(
+                raw: rejected.raw,
+                suggested: rejected.std
+            )
+            lastShownSuggestion = nil
+        }
         textDocumentProxy.insertText(" ")
+        lastAcceptedSuggestion = nil
+        lastAcceptedRaw = nil
+        charCountAfterAcceptance = 0
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let self else { return }
@@ -739,6 +841,8 @@ final class KeyboardViewController: UIInputViewController {
               suggestion != "—"
         else { return }
 
+        lastShownSuggestion = nil
+
         guard let word = currentWordAfterLastSpace(), !word.isEmpty else {
             textDocumentProxy.insertText(suggestion + " ")
             updateSuggestionBar(left: "", centre: "", right: "")
@@ -757,6 +861,9 @@ final class KeyboardViewController: UIInputViewController {
             ? String(suggestion.prefix(1).uppercased() + suggestion.dropFirst())
             : suggestion
         textDocumentProxy.insertText(finalSuggestion + " ")
+        lastAcceptedSuggestion = finalSuggestion
+        lastAcceptedRaw = word
+        charCountAfterAcceptance = 0
         TanglishAPIService.shared.logAcceptedSuggestion(
             raw: word,
             std: finalSuggestion
@@ -774,7 +881,7 @@ final class KeyboardViewController: UIInputViewController {
             self?.fetchSuggestionForCurrentWord()
         }
         debounceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
     }
 
     private func fetchSuggestionForCurrentWord() {
@@ -841,6 +948,12 @@ final class KeyboardViewController: UIInputViewController {
         leftSuggestionButton.setTitle(left, for: .normal)
         centerSuggestionButton.setTitle(centre, for: .normal)
         rightSuggestionButton.setTitle(right, for: .normal)
+
+        if !centre.isEmpty, !left.isEmpty, left != centre {
+            lastShownSuggestion = (raw: left, std: centre)
+        } else {
+            lastShownSuggestion = nil
+        }
     }
 
     /// Characters after the last whitespace boundary (current word being typed).
