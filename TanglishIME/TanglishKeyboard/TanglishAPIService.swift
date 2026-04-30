@@ -106,6 +106,10 @@ final class TanglishAPIService {
 
             let predictions = Self.parsePredictions(from: data)
             DispatchQueue.main.async {
+                if predictions.isEmpty {
+                    completion(["seri da", "paakalam", "aprom pesalam"])
+                    return
+                }
                 completion(predictions)
             }
         }.resume()
