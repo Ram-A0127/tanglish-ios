@@ -133,9 +133,11 @@ final class KeyboardViewController: UIInputViewController {
     ]
 
     private let keyHeight: CGFloat = 42
-    private let spaceKeyHeight: CGFloat = 46
     private let keyGap: CGFloat = 6
-    private let keyboardHeight: CGFloat = 260
+    /// Horizontal inset so row 2 (a–l) reads centered with slightly wider keys than row 1 (q–p).
+    private let qwertyRow2SideInset: CGFloat = 14
+    /// Shift / backspace width relative to a letter key on row 3 (iPhone-like proportions).
+    private let modifierKeyWidthMultiplier: CGFloat = 1.15
 
     private var isShiftEnabled = false
     private var capsLockEnabled = false
@@ -153,6 +155,7 @@ final class KeyboardViewController: UIInputViewController {
     private var buttonsWithWidthConstraint = Set<ObjectIdentifier>()
     /// Letter keys only (QWERTY rows); empty when in numbers mode.
     private var keyButtons: [[UIButton]] = []
+    private var thirdRowModifierWidthConstraints: [NSLayoutConstraint] = []
 
     private lazy var keyboardContentStack: UIStackView = {
         let stack = UIStackView()
@@ -188,9 +191,14 @@ final class KeyboardViewController: UIInputViewController {
     private lazy var spaceButton: UIButton = makeSpaceBarButton()
     private lazy var returnButton: UIButton = makeReturnKeyButton()
 
+    override func loadView() {
+        let root = KeyboardRootView()
+        root.backgroundColor = UIColor(hex: "#F0F0F0")
+        view = root
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.frame.size.height = keyboardHeight
         setupKeyboardUI()
         updateShiftAppearance()
         warmUpCache()
@@ -253,11 +261,13 @@ final class KeyboardViewController: UIInputViewController {
 
         view.addSubview(rootStack)
 
+        rootStack.spacing = 0
+
         NSLayoutConstraint.activate([
-            rootStack.topAnchor.constraint(equalTo: view.topAnchor, constant: keyGap),
+            rootStack.topAnchor.constraint(equalTo: view.topAnchor),
             rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: keyGap),
             rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -keyGap),
-            rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -keyGap),
+            rootStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
         ])
 
         let suggestionBar = UIStackView(arrangedSubviews: [
@@ -283,7 +293,7 @@ final class KeyboardViewController: UIInputViewController {
             suggestionBar.topAnchor.constraint(equalTo: suggestionBarContainer.topAnchor),
             suggestionBar.leadingAnchor.constraint(equalTo: suggestionBarContainer.leadingAnchor),
             suggestionBar.trailingAnchor.constraint(equalTo: suggestionBarContainer.trailingAnchor),
-            suggestionBar.heightAnchor.constraint(equalToConstant: 44),
+            suggestionBar.heightAnchor.constraint(equalToConstant: 43.5),
 
             suggestionBorder.topAnchor.constraint(equalTo: suggestionBar.bottomAnchor),
             suggestionBorder.leadingAnchor.constraint(equalTo: suggestionBarContainer.leadingAnchor),
@@ -291,7 +301,7 @@ final class KeyboardViewController: UIInputViewController {
             suggestionBorder.bottomAnchor.constraint(equalTo: suggestionBarContainer.bottomAnchor),
             suggestionBorder.heightAnchor.constraint(equalToConstant: 0.5),
 
-            suggestionBarContainer.heightAnchor.constraint(equalToConstant: 44.5),
+            suggestionBarContainer.heightAnchor.constraint(equalToConstant: 44),
         ])
 
         leftSuggestionButton.tag = 0
@@ -322,6 +332,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func rebuildKeyboardRows() {
+        NSLayoutConstraint.deactivate(thirdRowModifierWidthConstraints)
+        thirdRowModifierWidthConstraints.removeAll()
+
         keyboardContentStack.arrangedSubviews.forEach { row in
             keyboardContentStack.removeArrangedSubview(row)
             row.removeFromSuperview()
@@ -341,7 +354,7 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             modeToggleButton.setTitle("123", for: .normal)
             let (row1, buttons1) = makeLetterKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"])
-            let (row2, buttons2) = makeLetterKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"])
+            let (row2, buttons2) = makeLetterKeyRowCenteredInset(["a", "s", "d", "f", "g", "h", "j", "k", "l"])
             let (row3, buttons3) = makeThirdRow()
             keyboardContentStack.addArrangedSubview(row1)
             keyboardContentStack.addArrangedSubview(row2)
@@ -366,6 +379,34 @@ final class KeyboardViewController: UIInputViewController {
         return (row, buttons)
     }
 
+    /// Row 2: nine letter keys, `fillEqually`, inset left/right so the row is centered with wider keys than row 1.
+    private func makeLetterKeyRowCenteredInset(_ letters: [String]) -> (UIView, [UIButton]) {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.distribution = .fillEqually
+        row.spacing = keyGap
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        var buttons: [UIButton] = []
+        for letter in letters {
+            let button = makeKeyButton(title: letter, action: #selector(handleKeyPress(_:)))
+            row.addArrangedSubview(button)
+            buttons.append(button)
+        }
+
+        container.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: container.topAnchor),
+            row.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: qwertyRow2SideInset),
+            row.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -qwertyRow2SideInset),
+        ])
+        return (container, buttons)
+    }
+
     private func makeAlphaRow(_ letters: [String]) -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
@@ -384,17 +425,28 @@ final class KeyboardViewController: UIInputViewController {
         row.distribution = .fill
         row.spacing = keyGap
 
-        setFixedWidthIfNeeded(shiftButton, 56)
-        setFixedWidthIfNeeded(backspaceButton, 56)
+        let letterStack = UIStackView()
+        letterStack.axis = .horizontal
+        letterStack.distribution = .fillEqually
+        letterStack.spacing = keyGap
 
-        row.addArrangedSubview(shiftButton)
         var letterButtons: [UIButton] = []
         for letter in ["z", "x", "c", "v", "b", "n", "m"] {
             let button = makeKeyButton(title: letter, action: #selector(handleKeyPress(_:)))
-            row.addArrangedSubview(button)
+            letterStack.addArrangedSubview(button)
             letterButtons.append(button)
         }
+
+        row.addArrangedSubview(shiftButton)
+        row.addArrangedSubview(letterStack)
         row.addArrangedSubview(backspaceButton)
+
+        if let z = letterButtons.first {
+            let w1 = shiftButton.widthAnchor.constraint(equalTo: z.widthAnchor, multiplier: modifierKeyWidthMultiplier)
+            let w2 = backspaceButton.widthAnchor.constraint(equalTo: z.widthAnchor, multiplier: modifierKeyWidthMultiplier)
+            NSLayoutConstraint.activate([w1, w2])
+            thirdRowModifierWidthConstraints = [w1, w2]
+        }
         return (row, letterButtons)
     }
 
@@ -465,16 +517,22 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeEmojiPanelContainer() -> UIView {
-        let outer = UIView()
-        outer.translatesAutoresizingMaskIntoConstraints = false
-        outer.backgroundColor = UIColor(hex: "#F0F0F0")
-        outer.heightAnchor.constraint(equalToConstant: 216).isActive = true
+        let container = UIStackView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.axis = .horizontal
+        container.spacing = 0
+        container.alignment = .fill
+        container.distribution = .fill
+        container.backgroundColor = UIColor(hex: "#F0F0F0")
+        container.heightAnchor.constraint(equalToConstant: 216).isActive = true
 
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = UIColor(hex: "#F0F0F0")
         scrollView.alwaysBounceVertical = true
         scrollView.showsVerticalScrollIndicator = true
+        scrollView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        scrollView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let contentStack = UIStackView()
         contentStack.axis = .vertical
@@ -503,18 +561,35 @@ final class KeyboardViewController: UIInputViewController {
             contentStack.addArrangedSubview(rowStack)
         }
 
-        let backButton = makeEmojiBackButton()
-        contentStack.addArrangedSubview(backButton)
-
-        outer.addSubview(scrollView)
         scrollView.addSubview(contentStack)
+        container.addArrangedSubview(scrollView)
+
+        let abcTab = UIButton(type: .custom)
+        abcTab.translatesAutoresizingMaskIntoConstraints = false
+        abcTab.setTitle("ABC", for: .normal)
+        abcTab.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        abcTab.setTitleColor(UIColor(hex: "#111827"), for: .normal)
+        abcTab.backgroundColor = UIColor(hex: "#D1D5DB")
+        abcTab.contentHorizontalAlignment = .center
+        abcTab.contentVerticalAlignment = .center
+        abcTab.titleLabel?.transform = CGAffineTransform(rotationAngle: -.pi / 2)
+        abcTab.addTarget(self, action: #selector(handleEmojiBack), for: .touchUpInside)
+        abcTab.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        abcTab.setContentHuggingPriority(.required, for: .horizontal)
+        abcTab.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let tabCornerRadius: CGFloat = 5
+        if #available(iOS 11.0, *) {
+            abcTab.layer.cornerRadius = tabCornerRadius
+            abcTab.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        } else {
+            abcTab.layer.cornerRadius = tabCornerRadius
+        }
+        abcTab.clipsToBounds = true
+
+        container.addArrangedSubview(abcTab)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: outer.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: outer.bottomAnchor),
-
             contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
@@ -522,7 +597,7 @@ final class KeyboardViewController: UIInputViewController {
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
 
-        return outer
+        return container
     }
 
     private func makeEmojiKeyButton(_ emoji: String) -> UIButton {
@@ -536,21 +611,6 @@ final class KeyboardViewController: UIInputViewController {
         return button
     }
 
-    private func makeEmojiBackButton() -> UIButton {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("ABC", for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        button.setTitleColor(UIColor(hex: "#111827"), for: .normal)
-        button.backgroundColor = UIColor(hex: "#FFFFFF")
-        button.layer.cornerRadius = 8
-        button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
-        button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
-        button.addTarget(self, action: #selector(handleDismissEmojiPanel), for: .touchUpInside)
-        return button
-    }
-
     private func makeKeyButton(title: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -558,7 +618,7 @@ final class KeyboardViewController: UIInputViewController {
         button.setTitleColor(UIColor(hex: "#111827"), for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = UIColor(hex: "#FFFFFF")
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = 5
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
         button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
@@ -572,7 +632,7 @@ final class KeyboardViewController: UIInputViewController {
         button.setTitleColor(textColor, for: .normal)
         button.titleLabel?.font = font
         button.backgroundColor = .white
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = 5
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
         button.addTarget(self, action: #selector(suggestionTapped(_:)), for: .touchUpInside)
@@ -606,10 +666,10 @@ final class KeyboardViewController: UIInputViewController {
         button.setTitleColor(UIColor(hex: "#6B7280"), for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = UIColor(hex: "#FFFFFF")
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = 5
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor(white: 0.85, alpha: 1).cgColor
-        button.heightAnchor.constraint(equalToConstant: spaceKeyHeight).isActive = true
+        button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
         button.addTarget(self, action: #selector(handleSpace), for: .touchUpInside)
         return button
     }
@@ -621,7 +681,7 @@ final class KeyboardViewController: UIInputViewController {
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = UIColor(hex: "#ADB5BD")
-        button.layer.cornerRadius = 8
+        button.layer.cornerRadius = 5
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor(white: 0.75, alpha: 1).cgColor
         button.heightAnchor.constraint(equalToConstant: keyHeight).isActive = true
@@ -631,30 +691,36 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func handleKeyPress(_ sender: UIButton) {
         guard let title = sender.currentTitle, title.count == 1 else { return }
-        if let rejected = lastShownSuggestion {
-            TanglishAPIService.shared.logRejectedSuggestion(
-                raw: rejected.raw,
-                suggested: rejected.std
-            )
-            lastShownSuggestion = nil
-        }
         let output = isShiftEnabled ? title.uppercased() : title.lowercased()
 
+        // INSERT TEXT FIRST — instant response
+        textDocumentProxy.insertText(output)
+
+        UIView.animate(withDuration: 0.05) {
+            sender.backgroundColor = UIColor(hex: "#E5E7EB")
+        } completion: { _ in
+            UIView.animate(withDuration: 0.05) {
+                sender.backgroundColor = UIColor(hex: "#FFFFFF")
+            }
+        }
+
+        if let rejected = lastShownSuggestion {
+            let raw = rejected.raw
+            let std = rejected.std
+            lastShownSuggestion = nil
+            DispatchQueue.global(qos: .utility).async {
+                TanglishAPIService.shared.logRejectedSuggestion(raw: raw, suggested: std)
+            }
+        }
+
+        handlePostAcceptanceKeyInserted()
+
         if title == "." || title == "?" || title == "!" {
-            textDocumentProxy.insertText(output)
-            handlePostAcceptanceKeyInserted()
             if !capsLockEnabled {
                 isShiftEnabled = false
             }
             updateShiftAppearance()
-            scheduleSuggestionFetch()
-            return
-        }
-
-        textDocumentProxy.insertText(output)
-        handlePostAcceptanceKeyInserted()
-
-        if isShiftEnabled, !capsLockEnabled, output.first?.isLetter == true {
+        } else if isShiftEnabled, !capsLockEnabled, output.first?.isLetter == true {
             isShiftEnabled = false
             updateShiftAppearance()
         }
@@ -828,6 +894,10 @@ final class KeyboardViewController: UIInputViewController {
         rebuildKeyboardRows()
     }
 
+    @objc private func handleEmojiBack() {
+        handleDismissEmojiPanel()
+    }
+
     @objc private func handleEmojiInsert(_ sender: UIButton) {
         guard let emoji = sender.title(for: .normal), !emoji.isEmpty else { return }
         textDocumentProxy.insertText(emoji)
@@ -881,7 +951,7 @@ final class KeyboardViewController: UIInputViewController {
             self?.fetchSuggestionForCurrentWord()
         }
         debounceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
     }
 
     private func fetchSuggestionForCurrentWord() {
@@ -891,56 +961,71 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         let sentence = before.trimmingCharacters(in: .whitespacesAndNewlines)
+        let word = currentWordAfterLastSpace(in: before) ?? ""
 
-        let word = currentWordAfterLastSpace() ?? ""
-
-        if !word.isEmpty {
-            let wordLower = word.lowercased()
-
-            if let correction = localCorrections[wordLower] {
-                updateSuggestionBar(left: word, centre: correction.std, right: correction.tamil)
-                return
-            }
-
-            if englishWords.contains(wordLower) {
-                TanglishAPIService.shared.standardise(word: word, isEnglish: true) { [weak self] result in
-                    guard let self else { return }
-                    self.updateSuggestionBar(
-                        left: word,
-                        centre: result?.std ?? "",
-                        right: result?.tamil ?? ""
-                    )
-                }
-                return
-            }
-
-            if word.count >= minimumWordLengthForStandardise {
-                TanglishAPIService.shared.standardise(word: word, isEnglish: false) { [weak self] result in
-                    guard let self else { return }
-                    self.updateSuggestionBar(
-                        left: word,
-                        centre: result?.std ?? "",
-                        right: result?.tamil ?? ""
-                    )
-                }
-            } else {
-                updateSuggestionBar(left: "", centre: "", right: "")
-            }
-            return
-        }
-
-        if let instant = lookupInstantPredictions(for: sentence) {
-            updateSuggestionBar(left: instant[0], centre: instant[1], right: instant[2])
-            return
-        }
-
-        TanglishAPIService.shared.predict(sentence: sentence) { [weak self] predictions in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            self.updateSuggestionBar(
-                left: predictions.count > 0 ? predictions[0] : "",
-                centre: predictions.count > 1 ? predictions[1] : "",
-                right: predictions.count > 2 ? predictions[2] : ""
-            )
+
+            if !word.isEmpty {
+                let wordLower = word.lowercased()
+
+                if let correction = self.localCorrections[wordLower] {
+                    DispatchQueue.main.async {
+                        self.updateSuggestionBar(left: word, centre: correction.std, right: correction.tamil)
+                    }
+                    return
+                }
+
+                if self.englishWords.contains(wordLower) {
+                    TanglishAPIService.shared.standardise(word: word, isEnglish: true) { [weak self] result in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.updateSuggestionBar(
+                                left: word,
+                                centre: result?.std ?? "",
+                                right: result?.tamil ?? ""
+                            )
+                        }
+                    }
+                    return
+                }
+
+                if word.count >= self.minimumWordLengthForStandardise {
+                    TanglishAPIService.shared.standardise(word: word, isEnglish: false) { [weak self] result in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.updateSuggestionBar(
+                                left: word,
+                                centre: result?.std ?? "",
+                                right: result?.tamil ?? ""
+                            )
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.updateSuggestionBar(left: "", centre: "", right: "")
+                    }
+                }
+                return
+            }
+
+            if let instant = self.lookupInstantPredictions(for: sentence) {
+                DispatchQueue.main.async {
+                    self.updateSuggestionBar(left: instant[0], centre: instant[1], right: instant[2])
+                }
+                return
+            }
+
+            TanglishAPIService.shared.predict(sentence: sentence) { [weak self] predictions in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.updateSuggestionBar(
+                        left: predictions.count > 0 ? predictions[0] : "",
+                        centre: predictions.count > 1 ? predictions[1] : "",
+                        right: predictions.count > 2 ? predictions[2] : ""
+                    )
+                }
+            }
         }
     }
 
@@ -962,6 +1047,11 @@ final class KeyboardViewController: UIInputViewController {
         guard let before = textDocumentProxy.documentContextBeforeInput, !before.isEmpty else {
             return nil
         }
+        return currentWordAfterLastSpace(in: before)
+    }
+
+    private func currentWordAfterLastSpace(in before: String) -> String? {
+        guard !before.isEmpty else { return nil }
         if before.last?.isWhitespace == true {
             return nil
         }
@@ -993,6 +1083,27 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         return nil
+    }
+}
+
+private final class KeyboardRootView: UIView {
+    override var intrinsicContentSize: CGSize {
+        let bottomInset: CGFloat
+        if #available(iOS 11.0, *) {
+            bottomInset = safeAreaInsets.bottom
+        } else {
+            bottomInset = 0
+        }
+        return CGSize(
+            width: UIView.noIntrinsicMetric,
+            height: 260 + bottomInset
+        )
+    }
+
+    @available(iOS 11.0, *)
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        invalidateIntrinsicContentSize()
     }
 }
 

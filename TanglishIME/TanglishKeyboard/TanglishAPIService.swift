@@ -9,6 +9,20 @@ final class TanglishAPIService {
     }
 
     static let shared = TanglishAPIService()
+
+    private let instantPredictions: [String: [String]] = [
+        "vanakkam da": ["eppadi irukka?", "nalam thaane?", "seekiram sollu"],
+        "nalla iruku": ["santhosam da", "neenga eppadi?", "sollu da"],
+        "seri da": ["aama paakalam", "purinjikko da", "aprom pesalam"],
+        "romba nalla": ["iruku da", "vishayam da!", "santhosama iruku"],
+        "miss pannuren": ["seekiram paakanum da", "romba nalam paakala", "unnai pathi yosikren"],
+        "pasikuthu da": ["enna saapidalam?", "biryani va?", "hotel pouvom da"],
+        "romba stress": ["deadline iruku da", "mudiyala da", "help venum da"],
+        "dei romba": ["kashtama iruku da", "kovama iruku", "yosikren da"],
+        "paravaillai da": ["nalla aagum", "trust pannu", "seekiram paakalam"],
+        "seekiram vaa": ["wait pannuren da", "romba neram aachu", "miss pannuren"],
+    ]
+
     private let supabaseURL = "https://uiwmcmutiywduqbeapnj.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVpd21jbXV0aXl3ZHVxYmVhcG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTg5ODksImV4cCI6MjA5MjA3NDk4OX0.SGfj-hiBrTTt9hzjheXun_NawDUXFsOttcU9vMF1YZ4"
 
@@ -76,6 +90,17 @@ final class TanglishAPIService {
     }
 
     func predict(sentence: String, completion: @escaping ([String]) -> Void) {
+        let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        for (key, predictions) in instantPredictions {
+            if trimmed.hasSuffix(key) || trimmed == key {
+                DispatchQueue.main.async {
+                    completion(predictions)
+                }
+                return
+            }
+        }
+
         let trimmedSentence = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: "https://tanglish-ime.vercel.app/api/predict") else {
             DispatchQueue.main.async { completion([]) }
@@ -98,7 +123,7 @@ final class TanglishAPIService {
             return
         }
 
-        session.dataTask(with: request) { data, _, error in
+        let task = session.dataTask(with: request) { data, _, error in
             guard error == nil, let data else {
                 DispatchQueue.main.async { completion([]) }
                 return
@@ -112,7 +137,11 @@ final class TanglishAPIService {
                 }
                 completion(predictions)
             }
-        }.resume()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            task.cancel()
+        }
+        task.resume()
     }
 
     func logAcceptedSuggestion(raw: String, std: String) {
