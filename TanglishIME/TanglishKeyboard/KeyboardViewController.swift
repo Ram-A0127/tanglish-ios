@@ -201,20 +201,6 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         setupKeyboardUI()
         updateShiftAppearance()
-        warmUpCache()
-    }
-
-    private func warmUpCache() {
-        let commonSentences = [
-            "vanakkam da",
-            "nalla iruku",
-            "seri da",
-            "romba nalla",
-            "seekiram vaa",
-        ]
-        for sentence in commonSentences {
-            TanglishAPIService.shared.predict(sentence: sentence) { _ in }
-        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
